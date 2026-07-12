@@ -19,7 +19,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register({ organizationName, name, email, password, plan });
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: any) {
       setError(err?.response?.data?.error || "Registration failed");
     } finally {

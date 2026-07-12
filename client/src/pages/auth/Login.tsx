@@ -1,10 +1,12 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useStartDemo } from "../../api/useStartDemo";
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const demo = useStartDemo();
   const [email, setEmail] = useState("demo@dsrsolutions.com");
   const [password, setPassword] = useState("Demo1234!");
   const [error, setError] = useState("");
@@ -16,7 +18,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: any) {
       setError(err?.response?.data?.error || "Login failed");
     } finally {
@@ -46,7 +48,13 @@ export default function Login() {
         <p className="mt-4 text-center text-sm text-slate-500">
           No account? <Link to="/register" className="font-medium text-brand-600">Create one</Link>
         </p>
-        <p className="mt-2 text-center text-xs text-slate-400">Demo login is pre-filled — just click Sign in.</p>
+        <button
+          className="mt-3 w-full text-center text-xs font-medium text-brand-600 hover:underline"
+          onClick={() => demo.mutate()}
+          disabled={demo.isPending}
+        >
+          {demo.isPending ? "Launching demo…" : "Or try a live demo — no signup required"}
+        </button>
       </div>
     </div>
   );

@@ -20,6 +20,14 @@ async function main() {
       plan: "SME",
       users: { create: { email, passwordHash, name: "Demo Owner", role: "OWNER" } },
       integration: { create: {} },
+      subscription: {
+        create: {
+          product: "BUNDLE",
+          tier: "ENTERPRISE",
+          status: "ACTIVE",
+          currentPeriodEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        },
+      },
     },
     include: { users: true },
   });

@@ -15,6 +15,9 @@ api.interceptors.response.use(
       localStorage.removeItem("dsr_token");
       if (!location.pathname.startsWith("/login")) location.assign("/login");
     }
+    if (error.response?.status === 402 && !location.pathname.startsWith("/pricing") && !location.pathname.startsWith("/billing")) {
+      location.assign("/pricing?upgrade=1");
+    }
     return Promise.reject(error);
   }
 );

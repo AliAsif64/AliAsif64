@@ -8,13 +8,14 @@ import {
   Workflow,
   Bot,
   Settings as SettingsIcon,
+  CreditCard,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import clsx from "clsx";
 
 const businessOsLinks = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/crm", label: "CRM & Deals", icon: Users },
   { to: "/invoicing", label: "Invoicing", icon: Receipt },
   { to: "/projects", label: "Projects", icon: KanbanSquare },
@@ -24,6 +25,10 @@ const businessOsLinks = [
 const aiSuiteLinks = [
   { to: "/automations", label: "Automations", icon: Workflow },
   { to: "/ai-assistant", label: "AI Assistant", icon: Bot },
+];
+
+const accountLinks = [
+  { to: "/billing", label: "Billing", icon: CreditCard },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
@@ -65,6 +70,7 @@ export default function Layout() {
         </div>
         <NavSection title="Business OS" links={businessOsLinks} />
         <NavSection title="AI Automation Suite" links={aiSuiteLinks} />
+        <NavSection title="Account" links={accountLinks} />
         <div className="mt-auto border-t border-slate-200 pt-4">
           <div className="mb-2 px-2 text-sm">
             <div className="font-medium">{user?.name}</div>

@@ -3,10 +3,12 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
+import { requireEntitlement } from "../middleware/entitlement";
 import { chat, isAIConfigured } from "../lib/ai";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireEntitlement("AI_SUITE"));
 
 router.get(
   "/status",

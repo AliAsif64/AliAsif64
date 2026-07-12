@@ -3,10 +3,12 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
+import { requireEntitlement } from "../middleware/entitlement";
 import { emitEvent } from "../services/automationEngine";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireEntitlement("BUSINESS_OS"));
 
 const projectSchema = z.object({
   name: z.string().min(1),

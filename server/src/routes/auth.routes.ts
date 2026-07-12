@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { signToken } from "../lib/jwt";
 import { asyncHandler } from "../middleware/errorHandler";
 import { requireAuth, AuthedRequest } from "../middleware/auth";
+import { TRIAL_DAYS } from "../config/plans";
 
 const router = Router();
 
@@ -32,6 +33,14 @@ router.post(
           create: { email: data.email, passwordHash, name: data.name, role: "OWNER" },
         },
         integration: { create: {} },
+        subscription: {
+          create: {
+            product: "BUNDLE",
+            tier: data.plan || "SME",
+            status: "TRIALING",
+            trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000),
+          },
+        },
       },
       include: { users: true },
     });

@@ -20,6 +20,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: { organizationName: string; name: string; email: string; password: string; plan?: string }) => Promise<void>;
+  loginWithToken: (token: string, user: User, organization: Organization) => void;
   logout: () => void;
 }
 
@@ -60,6 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOrganization(res.data.organization);
   }
 
+  function loginWithToken(token: string, nextUser: User, nextOrganization: Organization) {
+    localStorage.setItem("dsr_token", token);
+    setUser(nextUser);
+    setOrganization(nextOrganization);
+  }
+
   function logout() {
     localStorage.removeItem("dsr_token");
     setUser(null);
@@ -67,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, organization, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, organization, loading, login, register, loginWithToken, logout }}>
       {children}
     </AuthContext.Provider>
   );

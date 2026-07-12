@@ -5,10 +5,12 @@ import Stripe from "stripe";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
+import { requireEntitlement } from "../middleware/entitlement";
 import { sendMail } from "../lib/mailer";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireEntitlement("BUSINESS_OS"));
 
 const itemSchema = z.object({
   description: z.string().min(1),

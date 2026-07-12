@@ -3,10 +3,12 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../middleware/errorHandler";
 import { AuthedRequest, requireAuth } from "../middleware/auth";
+import { requireEntitlement } from "../middleware/entitlement";
 import { executeAutomation, scheduleAutomation, unscheduleAutomation } from "../services/automationEngine";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireEntitlement("AI_SUITE"));
 
 const actionSchema = z.object({
   type: z.enum(["send_email", "create_task", "webhook", "slack_notify", "ai_generate"]),

@@ -3,30 +3,32 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // ---------- Core / Multi-tenant ----------
-// Note: SQLite has no native enum support, so enum-like fields below are
-// plain Strings whose allowed values are validated with zod at the API layer
-// (see src/routes/*). Swapping the datasource provider to "postgresql" later
-// would let these become real Prisma enums if desired.
+// Note: enum-like fields below are plain Strings whose allowed values are
+// validated with zod at the API layer (see src/routes/*), so no schema
+// migration is needed to add a new status/type value.
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  plan      String   @default("SME") // SME | ENTERPRISE
-  createdAt DateTime @default(now())
+  id            String    @id @default(cuid())
+  name          String
+  plan          String    @default("SME") // SME | ENTERPRISE (self-reported company size, for segmentation)
+  isDemo        Boolean   @default(false)
+  demoExpiresAt DateTime?
+  createdAt     DateTime  @default(now())
 
-  users        User[]
-  contacts     Contact[]
-  deals        Deal[]
-  invoices     Invoice[]
-  projects     Project[]
-  automations  Automation[]
-  integration  Integration?
+  users         User[]
+  contacts      Contact[]
+  deals         Deal[]
+  invoices      Invoice[]
+  projects      Project[]
+  automations   Automation[]
+  integration   Integration?
   conversations AIConversation[]
+  subscription  Subscription?
 }
 
 // Role: OWNER | ADMIN | MANAGER | MEMBER
@@ -40,12 +42,41 @@ model User {
   title          String?
   active         Boolean  @default(true)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdAt      DateTime @default(now())
 
   assignedTasks  Task[]   @relation("AssignedTasks")
   ownedDeals     Deal[]   @relation("DealOwner")
   conversations  AIConversation[]
+}
+
+// ---------- Billing / Subscriptions ----------
+// One Subscription row per Organization: the source of truth for which
+// product(s) they're entitled to and their Stripe billing state. This is
+// billed on DSR's own platform Stripe account (STRIPE_SECRET_KEY), distinct
+// from the per-organization Stripe key in Integration used for THEIR
+// customer invoice payments.
+
+// product: BUSINESS_OS | AI_SUITE | BUNDLE
+// tier: SME | ENTERPRISE
+// billingPeriod: MONTHLY | ANNUAL
+// status: TRIALING | ACTIVE | PAST_DUE | CANCELED | INCOMPLETE
+model Subscription {
+  id                 String   @id @default(cuid())
+  organizationId     String   @unique
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product            String
+  tier               String
+  billingPeriod      String   @default("MONTHLY")
+  status             String   @default("TRIALING")
+  stripeCustomerId   String?
+  stripeSubscriptionId String?
+  stripePriceId      String?
+  trialEndsAt        DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 // ---------- CRM ----------
@@ -54,7 +85,7 @@ model User {
 model Contact {
   id             String   @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
   email          String?
   phone          String?
@@ -72,7 +103,7 @@ model Contact {
 model Deal {
   id                String   @id @default(cuid())
   organizationId    String
-  organization      Organization @relation(fields: [organizationId], references: [id])
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   title             String
   value             Float    @default(0)
   stage             String   @default("NEW")
@@ -91,7 +122,7 @@ model Deal {
 model Invoice {
   id             String   @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   number         String
   contactId      String?
   contact        Contact? @relation(fields: [contactId], references: [id])
@@ -126,7 +157,7 @@ model InvoiceItem {
 model Project {
   id             String   @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
   description    String?
   status         String   @default("ACTIVE")
@@ -156,7 +187,7 @@ model Task {
 model Automation {
   id             String   @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
   description    String?
   triggerType    String
@@ -183,7 +214,7 @@ model AutomationRun {
 model Integration {
   id              String   @id @default(cuid())
   organizationId  String   @unique
-  organization    Organization @relation(fields: [organizationId], references: [id])
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   smtpHost        String?
   smtpPort        Int?
   smtpUser        String?
@@ -197,7 +228,7 @@ model Integration {
 model AIConversation {
   id             String   @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
   user           User     @relation(fields: [userId], references: [id])
   title          String   @default("New conversation")
