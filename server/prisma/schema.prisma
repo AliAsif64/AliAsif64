@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Core / Multi-tenant ----------
+// Note: SQLite has no native enum support, so enum-like fields below are
+// plain Strings whose allowed values are validated with zod at the API layer
+// (see src/routes/*). Swapping the datasource provider to "postgresql" later
+// would let these become real Prisma enums if desired.
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  plan      String   @default("SME") // SME | ENTERPRISE
+  createdAt DateTime @default(now())
+
+  users        User[]
+  contacts     Contact[]
+  deals        Deal[]
+  invoices     Invoice[]
+  projects     Project[]
+  automations  Automation[]
+  integration  Integration?
+  conversations AIConversation[]
+}
+
+// Role: OWNER | ADMIN | MANAGER | MEMBER
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  name           String
+  role           String   @default("MEMBER")
+  department     String?
+  title          String?
+  active         Boolean  @default(true)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime @default(now())
+
+  assignedTasks  Task[]   @relation("AssignedTasks")
+  ownedDeals     Deal[]   @relation("DealOwner")
+  conversations  AIConversation[]
+}
+
+// ---------- CRM ----------
+
+// LeadStatus: NEW | CONTACTED | QUALIFIED | UNQUALIFIED
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  email          String?
+  phone          String?
+  company        String?
+  status         String   @default("NEW")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  deals    Deal[]
+  invoices Invoice[]
+}
+
+// DealStage: NEW | QUALIFIED | PROPOSAL | NEGOTIATION | WON | LOST
+model Deal {
+  id                String   @id @default(cuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  title             String
+  value             Float    @default(0)
+  stage             String   @default("NEW")
+  contactId         String?
+  contact           Contact? @relation(fields: [contactId], references: [id])
+  ownerId           String?
+  owner             User?    @relation("DealOwner", fields: [ownerId], references: [id])
+  expectedCloseDate DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ---------- Invoicing ----------
+
+// InvoiceStatus: DRAFT | SENT | PAID | OVERDUE | VOID
+model Invoice {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  number         String
+  contactId      String?
+  contact        Contact? @relation(fields: [contactId], references: [id])
+  clientName     String
+  clientEmail    String?
+  status         String   @default("DRAFT")
+  issueDate      DateTime @default(now())
+  dueDate        DateTime
+  subtotal       Float    @default(0)
+  tax            Float    @default(0)
+  total          Float    @default(0)
+  notes          String?
+  paidAt         DateTime?
+  stripeSessionId String?
+  createdAt      DateTime @default(now())
+
+  items InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Float   @default(0)
+  amount      Float   @default(0)
+}
+
+// ---------- Projects & Tasks ----------
+
+model Project {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  description    String?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+
+  tasks Task[]
+}
+
+// TaskStatus: TODO | IN_PROGRESS | DONE
+model Task {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      String   @default("TODO")
+  assigneeId  String?
+  assignee    User?    @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------- AI Automation Suite ----------
+
+// TriggerType: CONTACT_CREATED | DEAL_STAGE_CHANGED | INVOICE_OVERDUE | TASK_COMPLETED | SCHEDULE | MANUAL
+model Automation {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  description    String?
+  triggerType    String
+  triggerConfig  String   @default("{}") // JSON string
+  actions        String   @default("[]") // JSON array of {type, config}
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  runs AutomationRun[]
+}
+
+// RunStatus: SUCCESS | FAILED | PARTIAL
+model AutomationRun {
+  id           String   @id @default(cuid())
+  automationId String
+  automation   Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  status       String
+  log          String   // JSON array of step results
+  triggeredBy  String?
+  createdAt    DateTime @default(now())
+}
+
+model Integration {
+  id              String   @id @default(cuid())
+  organizationId  String   @unique
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  smtpHost        String?
+  smtpPort        Int?
+  smtpUser        String?
+  smtpPass        String?
+  smtpFrom        String?
+  slackWebhookUrl String?
+  stripeSecretKey String?
+  updatedAt       DateTime @updatedAt
+}
+
+model AIConversation {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  title          String   @default("New conversation")
+  createdAt      DateTime @default(now())
+
+  messages AIMessage[]
+}
+
+// MessageRole: USER | ASSISTANT
+model AIMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
+}
