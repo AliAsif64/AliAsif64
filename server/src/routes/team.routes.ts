@@ -71,8 +71,13 @@ router.patch(
   requireRole("OWNER", "ADMIN"),
   asyncHandler(async (req: AuthedRequest, res) => {
     const data = updateSchema.parse(req.body);
+    const existing = await prisma.user.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Team member not found" });
+    if (existing.role === "OWNER") return res.status(403).json({ error: "The workspace owner cannot be modified" });
     const user = await prisma.user.update({
-      where: { id: req.params.id },
+      where: { id: existing.id },
       data,
       select: { id: true, name: true, email: true, role: true, department: true, title: true, active: true },
     });

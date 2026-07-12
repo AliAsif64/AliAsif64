@@ -49,8 +49,12 @@ router.patch(
   "/contacts/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
     const data = contactSchema.partial().parse(req.body);
+    const existing = await prisma.contact.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Contact not found" });
     const contact = await prisma.contact.update({
-      where: { id: req.params.id },
+      where: { id: existing.id },
       data,
     });
     res.json(contact);
@@ -60,7 +64,10 @@ router.patch(
 router.delete(
   "/contacts/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
-    await prisma.contact.delete({ where: { id: req.params.id } });
+    const { count } = await prisma.contact.deleteMany({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (count === 0) return res.status(404).json({ error: "Contact not found" });
     res.status(204).send();
   })
 );
@@ -107,16 +114,19 @@ router.patch(
   "/deals/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
     const data = dealSchema.partial().parse(req.body);
-    const existing = await prisma.deal.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.deal.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Deal not found" });
     const deal = await prisma.deal.update({
-      where: { id: req.params.id },
+      where: { id: existing.id },
       data: {
         ...data,
         expectedCloseDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : undefined,
       },
       include: { contact: true, owner: true },
     });
-    if (data.stage && existing && data.stage !== existing.stage) {
+    if (data.stage && data.stage !== existing.stage) {
       await emitEvent(req.auth!.organizationId, "DEAL_STAGE_CHANGED", { deal, previousStage: existing.stage });
     }
     res.json(deal);
@@ -126,7 +136,10 @@ router.patch(
 router.delete(
   "/deals/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
-    await prisma.deal.delete({ where: { id: req.params.id } });
+    const { count } = await prisma.deal.deleteMany({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (count === 0) return res.status(404).json({ error: "Deal not found" });
     res.status(204).send();
   })
 );

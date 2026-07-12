@@ -67,8 +67,12 @@ router.patch(
   "/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
     const data = automationSchema.partial().parse(req.body);
+    const existing = await prisma.automation.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Automation not found" });
     const automation = await prisma.automation.update({
-      where: { id: req.params.id },
+      where: { id: existing.id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.description !== undefined && { description: data.description }),
@@ -87,8 +91,12 @@ router.patch(
 router.delete(
   "/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
-    unscheduleAutomation(req.params.id);
-    await prisma.automation.delete({ where: { id: req.params.id } });
+    const existing = await prisma.automation.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Automation not found" });
+    unscheduleAutomation(existing.id);
+    await prisma.automation.delete({ where: { id: existing.id } });
     res.status(204).send();
   })
 );
@@ -96,9 +104,13 @@ router.delete(
 router.post(
   "/:id/run",
   asyncHandler(async (req: AuthedRequest, res) => {
-    await executeAutomation(req.params.id, req.body.context || {}, "manual");
+    const existing = await prisma.automation.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Automation not found" });
+    await executeAutomation(existing.id, req.body.context || {}, "manual");
     const runs = await prisma.automationRun.findMany({
-      where: { automationId: req.params.id },
+      where: { automationId: existing.id },
       orderBy: { createdAt: "desc" },
       take: 1,
     });
@@ -110,7 +122,7 @@ router.get(
   "/:id/runs",
   asyncHandler(async (req: AuthedRequest, res) => {
     const runs = await prisma.automationRun.findMany({
-      where: { automationId: req.params.id },
+      where: { automationId: req.params.id, automation: { organizationId: req.auth!.organizationId } },
       orderBy: { createdAt: "desc" },
     });
     res.json(runs);

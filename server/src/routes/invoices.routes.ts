@@ -91,8 +91,12 @@ router.patch(
   asyncHandler(async (req: AuthedRequest, res) => {
     const statusSchema = z.object({ status: z.enum(["DRAFT", "SENT", "PAID", "OVERDUE", "VOID"]).optional() });
     const data = statusSchema.parse(req.body);
+    const existing = await prisma.invoice.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Invoice not found" });
     const invoice = await prisma.invoice.update({
-      where: { id: req.params.id },
+      where: { id: existing.id },
       data: { ...data, paidAt: data.status === "PAID" ? new Date() : undefined },
       include: { items: true },
     });

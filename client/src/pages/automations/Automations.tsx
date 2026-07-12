@@ -1,10 +1,104 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Sparkles } from "lucide-react";
 import { api } from "../../api/client";
 import Modal from "../../components/Modal";
 import Badge from "../../components/Badge";
+
+interface AutomationDraft {
+  name: string;
+  description: string;
+  triggerType: string;
+  triggerConfig: Record<string, unknown>;
+  actions: { type: string; config: Record<string, unknown> }[];
+}
+
+function AICreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [prompt, setPrompt] = useState("");
+
+  const generate = useMutation({
+    mutationFn: async () => (await api.post<AutomationDraft>("/ai/generate-automation", { prompt })).data,
+  });
+
+  const create = useMutation({
+    mutationFn: async (draft: AutomationDraft) => (await api.post("/automations", draft)).data,
+    onSuccess: () => {
+      onCreated();
+      onClose();
+    },
+  });
+
+  return (
+    <Modal title="Create automation with AI" onClose={onClose}>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          generate.mutate();
+        }}
+      >
+        <div>
+          <label className="label">Describe what you want to automate</label>
+          <textarea
+            className="input"
+            rows={3}
+            placeholder='e.g. "When a deal is won, send a thank-you email to the contact and post the win in Slack"'
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            required
+            minLength={5}
+          />
+        </div>
+        <button className="btn-primary w-full justify-center" disabled={generate.isPending}>
+          <Sparkles size={16} /> {generate.isPending ? "Generating…" : generate.data ? "Regenerate" : "Generate automation"}
+        </button>
+      </form>
+
+      {generate.isError && (
+        <p className="mt-3 text-sm text-red-600">
+          {(generate.error as any)?.response?.data?.error || "Generation failed. Try rephrasing."}
+        </p>
+      )}
+
+      {generate.data && (
+        <div className="mt-4 space-y-3">
+          <div className="rounded-lg border border-slate-200 p-3">
+            <div className="text-sm font-semibold text-slate-800">{generate.data.name}</div>
+            {generate.data.description && <p className="mb-2 text-xs text-slate-500">{generate.data.description}</p>}
+            <div className="text-xs text-slate-600">
+              <span className="font-medium">When:</span> {generate.data.triggerType.replace(/_/g, " ").toLowerCase()}
+              {Object.keys(generate.data.triggerConfig).length > 0 && (
+                <span className="text-slate-400"> ({JSON.stringify(generate.data.triggerConfig)})</span>
+              )}
+            </div>
+            <div className="mt-1 text-xs text-slate-600">
+              <span className="font-medium">Then:</span>
+              <ol className="ml-4 list-decimal">
+                {generate.data.actions.map((a, i) => (
+                  <li key={i}>
+                    {a.type.replace(/_/g, " ")}{" "}
+                    <span className="text-slate-400">{JSON.stringify(a.config)}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+          <button
+            className="btn-primary w-full justify-center"
+            onClick={() => create.mutate(generate.data)}
+            disabled={create.isPending}
+          >
+            {create.isPending ? "Creating…" : "Create this automation"}
+          </button>
+          {create.isError && (
+            <p className="text-sm text-red-600">{(create.error as any)?.response?.data?.error || "Creation failed."}</p>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 interface Automation {
   id: string;
@@ -67,6 +161,7 @@ function ActionFields({ action, onChange }: { action: ActionDraft; onChange: (co
 export default function Automations() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showAIForm, setShowAIForm] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [triggerType, setTriggerType] = useState("CONTACT_CREATED");
@@ -116,9 +211,14 @@ export default function Automations() {
           <h1 className="text-2xl font-bold">Automations</h1>
           <p className="text-sm text-slate-500">Trigger actions automatically across your business — no code required.</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>
-          <Plus size={16} /> New automation
-        </button>
+        <div className="flex gap-2">
+          <button className="btn-secondary" onClick={() => setShowAIForm(true)}>
+            <Sparkles size={16} /> Create with AI
+          </button>
+          <button className="btn-primary" onClick={() => setShowForm(true)}>
+            <Plus size={16} /> New automation
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -243,6 +343,13 @@ export default function Automations() {
             </button>
           </form>
         </Modal>
+      )}
+
+      {showAIForm && (
+        <AICreateModal
+          onClose={() => setShowAIForm(false)}
+          onCreated={() => queryClient.invalidateQueries({ queryKey: ["automations"] })}
+        />
       )}
     </div>
   );

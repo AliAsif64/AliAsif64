@@ -83,17 +83,19 @@ model Subscription {
 
 // LeadStatus: NEW | CONTACTED | QUALIFIED | UNQUALIFIED
 model Contact {
-  id             String   @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  email          String?
-  phone          String?
-  company        String?
-  status         String   @default("NEW")
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name             String
+  email            String?
+  phone            String?
+  company          String?
+  status           String   @default("NEW")
+  notes            String?
+  aiScore          Int?     // 0-100, produced by the AI lead-scoring endpoint
+  aiScoreRationale String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   deals    Deal[]
   invoices Invoice[]

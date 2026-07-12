@@ -43,7 +43,11 @@ router.patch(
   "/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
     const data = projectSchema.partial().parse(req.body);
-    const project = await prisma.project.update({ where: { id: req.params.id }, data });
+    const existing = await prisma.project.findFirst({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (!existing) return res.status(404).json({ error: "Project not found" });
+    const project = await prisma.project.update({ where: { id: existing.id }, data });
     res.json(project);
   })
 );
@@ -51,7 +55,10 @@ router.patch(
 router.delete(
   "/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
-    await prisma.project.delete({ where: { id: req.params.id } });
+    const { count } = await prisma.project.deleteMany({
+      where: { id: req.params.id, organizationId: req.auth!.organizationId },
+    });
+    if (count === 0) return res.status(404).json({ error: "Project not found" });
     res.status(204).send();
   })
 );
@@ -69,6 +76,10 @@ router.post(
   "/tasks",
   asyncHandler(async (req: AuthedRequest, res) => {
     const data = taskSchema.parse(req.body);
+    const project = await prisma.project.findFirst({
+      where: { id: data.projectId, organizationId: req.auth!.organizationId },
+    });
+    if (!project) return res.status(404).json({ error: "Project not found" });
     const task = await prisma.task.create({
       data: { ...data, dueDate: data.dueDate ? new Date(data.dueDate) : undefined },
     });
@@ -80,12 +91,16 @@ router.patch(
   "/tasks/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
     const data = taskSchema.partial().omit({ projectId: true }).parse(req.body);
+    const existing = await prisma.task.findFirst({
+      where: { id: req.params.id, project: { organizationId: req.auth!.organizationId } },
+    });
+    if (!existing) return res.status(404).json({ error: "Task not found" });
     const task = await prisma.task.update({
-      where: { id: req.params.id },
+      where: { id: existing.id },
       data: { ...data, dueDate: data.dueDate ? new Date(data.dueDate) : undefined },
       include: { project: true },
     });
-    if (data.status === "DONE") {
+    if (data.status === "DONE" && existing.status !== "DONE") {
       await emitEvent(task.project.organizationId, "TASK_COMPLETED", { task });
     }
     res.json(task);
@@ -95,7 +110,10 @@ router.patch(
 router.delete(
   "/tasks/:id",
   asyncHandler(async (req: AuthedRequest, res) => {
-    await prisma.task.delete({ where: { id: req.params.id } });
+    const { count } = await prisma.task.deleteMany({
+      where: { id: req.params.id, project: { organizationId: req.auth!.organizationId } },
+    });
+    if (count === 0) return res.status(404).json({ error: "Task not found" });
     res.status(204).send();
   })
 );

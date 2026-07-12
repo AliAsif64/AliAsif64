@@ -1,9 +1,64 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { Users, TrendingUp, Receipt, Workflow, ListChecks, Trophy } from "lucide-react";
+import { Users, TrendingUp, Receipt, Workflow, ListChecks, Trophy, Sparkles } from "lucide-react";
+import clsx from "clsx";
 import { api } from "../../api/client";
 import StatCard from "../../components/StatCard";
 import { useAuth } from "../../context/AuthContext";
+
+interface Insight {
+  title: string;
+  detail: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+}
+
+const PRIORITY_STYLE: Record<Insight["priority"], string> = {
+  HIGH: "bg-red-100 text-red-700",
+  MEDIUM: "bg-amber-100 text-amber-700",
+  LOW: "bg-slate-100 text-slate-600",
+};
+
+function AIInsightsCard() {
+  const insights = useMutation({
+    mutationFn: async () => (await api.post<{ insights: Insight[] }>("/ai/insights")).data.insights,
+  });
+
+  return (
+    <div className="card p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <Sparkles size={16} className="text-brand-500" /> AI Business Insights
+        </h2>
+        <button className="btn-secondary text-xs" onClick={() => insights.mutate()} disabled={insights.isPending}>
+          {insights.isPending ? "Analyzing…" : insights.data ? "Refresh" : "Analyze my business"}
+        </button>
+      </div>
+      {insights.isError && (
+        <p className="text-sm text-red-600">{(insights.error as any)?.response?.data?.error || "Something went wrong."}</p>
+      )}
+      {!insights.data && !insights.isPending && !insights.isError && (
+        <p className="text-sm text-slate-400">
+          Let the AI review your live pipeline, invoices, tasks, and automations and suggest what to do next.
+        </p>
+      )}
+      {insights.data && (
+        <div className="space-y-3">
+          {insights.data.map((insight, i) => (
+            <div key={i} className="rounded-lg border border-slate-200 p-3">
+              <div className="mb-1 flex items-center gap-2">
+                <span className={clsx("rounded-full px-2 py-0.5 text-xs font-medium", PRIORITY_STYLE[insight.priority])}>
+                  {insight.priority}
+                </span>
+                <span className="text-sm font-medium text-slate-800">{insight.title}</span>
+              </div>
+              <p className="text-sm text-slate-600">{insight.detail}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Overview {
   contactsCount: number;
@@ -53,6 +108,10 @@ export default function Dashboard() {
             <StatCard label="Revenue collected" value={`$${data.revenue.toLocaleString()}`} icon={Receipt} />
             <StatCard label="Outstanding" value={`$${data.outstanding.toLocaleString()}`} icon={Receipt} />
             <StatCard label="Tasks done" value={`${data.tasksDone}/${data.tasksTotal}`} icon={ListChecks} />
+          </div>
+
+          <div className="mb-6">
+            <AIInsightsCard />
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">

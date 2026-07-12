@@ -41,9 +41,15 @@ async function runAction(
         return { type: action.type, ok: result.sent, detail: result.sent ? `Email sent to ${to}` : result.reason! };
       }
       case "create_task": {
+        const project = await prisma.project.findFirst({
+          where: { id: action.config.projectId, organizationId },
+        });
+        if (!project) {
+          return { type: action.type, ok: false, detail: "Project not found in this organization" };
+        }
         const task = await prisma.task.create({
           data: {
-            projectId: action.config.projectId,
+            projectId: project.id,
             title: interpolate(action.config.title || "New task", context),
             description: action.config.description
               ? interpolate(action.config.description, context)
@@ -51,7 +57,7 @@ async function runAction(
             assigneeId: action.config.assigneeId || undefined,
           },
         });
-        return { type: action.type, ok: true, detail: `Created task ${task.id}` };
+        return { type: action.type, ok: true, detail: `Created task "${task.title}"` };
       }
       case "webhook": {
         const url = interpolate(action.config.url || "", context);

@@ -72,9 +72,23 @@ with its own data, users, subscription, and integration credentials.
 - **Run history**: every automation execution is logged with per-step
   success/failure detail, so failures (e.g. "no SMTP configured") are visible
   and actionable, not silent.
-- **AI Assistant**: a persistent chat assistant (Anthropic Claude) for
-  drafting communications, summarizing records, and suggesting next actions,
-  scoped per user/organization with conversation history.
+- **AI Assistant (data-aware)**: a persistent chat assistant (Anthropic
+  Claude) that is grounded in a live snapshot of the organization's actual
+  pipeline, invoices, tasks, and automation health — so it answers with real
+  numbers, deal names, and invoice references, not generic advice. Scoped per
+  user/organization with conversation history.
+- **Create automations with AI**: describe an automation in plain English
+  ("when a deal is won, email the contact and post the win in Slack") and the
+  AI generates a validated trigger + action configuration you can review and
+  create with one click.
+- **AI lead scoring**: score any CRM contact 0–100 with a written rationale,
+  based on their status, deal pipeline, deal values, and payment history.
+  Scores are stored on the contact and color-coded in the CRM table.
+- **AI email drafting**: generate a ready-to-send email for any contact from
+  a stated goal, using their real deal/invoice context.
+- **AI business insights**: one click on the dashboard turns the live
+  business snapshot into 3–5 prioritized, data-specific recommendations —
+  including which automations to set up.
 - **Integrations settings**: SMTP, Slack incoming webhook, and Stripe key are
   configured per-organization in Settings, independent of server-wide env
   vars — each tenant can bring their own providers.

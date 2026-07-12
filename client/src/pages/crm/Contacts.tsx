@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles, Mail, Copy } from "lucide-react";
+import clsx from "clsx";
 import { api } from "../../api/client";
 import Modal from "../../components/Modal";
 import Badge from "../../components/Badge";
@@ -12,7 +13,71 @@ interface Contact {
   phone?: string;
   company?: string;
   status: string;
+  aiScore?: number | null;
+  aiScoreRationale?: string | null;
   deals: { id: string; value: number; stage: string }[];
+}
+
+function scoreColor(score: number) {
+  if (score >= 70) return "bg-emerald-100 text-emerald-700";
+  if (score >= 40) return "bg-amber-100 text-amber-700";
+  return "bg-red-100 text-red-700";
+}
+
+function DraftEmailModal({ contact, onClose }: { contact: Contact; onClose: () => void }) {
+  const [goal, setGoal] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const draft = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ subject: string; body: string }>("/ai/draft-email", { contactId: contact.id, goal })).data,
+  });
+
+  async function copyDraft() {
+    if (!draft.data) return;
+    await navigator.clipboard.writeText(`Subject: ${draft.data.subject}\n\n${draft.data.body}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <Modal title={`Draft email to ${contact.name}`} onClose={onClose}>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          draft.mutate();
+        }}
+      >
+        <div>
+          <label className="label">What should this email achieve?</label>
+          <input
+            className="input"
+            placeholder='e.g. "Follow up on the proposal and ask for a decision this week"'
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            required
+            minLength={3}
+          />
+        </div>
+        <button className="btn-primary w-full justify-center" disabled={draft.isPending}>
+          <Sparkles size={16} /> {draft.isPending ? "Drafting…" : draft.data ? "Redraft" : "Draft with AI"}
+        </button>
+      </form>
+      {draft.isError && (
+        <p className="mt-3 text-sm text-red-600">{(draft.error as any)?.response?.data?.error || "Drafting failed."}</p>
+      )}
+      {draft.data && (
+        <div className="mt-4 rounded-lg border border-slate-200 p-3">
+          <div className="mb-2 text-sm font-semibold text-slate-800">{draft.data.subject}</div>
+          <p className="whitespace-pre-wrap text-sm text-slate-600">{draft.data.body}</p>
+          <button type="button" className="btn-secondary mt-3 text-xs" onClick={copyDraft}>
+            <Copy size={14} /> {copied ? "Copied!" : "Copy to clipboard"}
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
 }
 
 interface Deal {
@@ -29,6 +94,7 @@ function ContactsTab() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "" });
+  const [emailContact, setEmailContact] = useState<Contact | null>(null);
 
   const { data: contacts = [] } = useQuery({
     queryKey: ["contacts"],
@@ -42,6 +108,11 @@ function ContactsTab() {
       setShowForm(false);
       setForm({ name: "", email: "", phone: "", company: "" });
     },
+  });
+
+  const scoreLead = useMutation({
+    mutationFn: async (contactId: string) => (await api.post(`/ai/score-lead/${contactId}`)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["contacts"] }),
   });
 
   return (
@@ -60,6 +131,8 @@ function ContactsTab() {
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Deals</th>
+              <th className="px-4 py-3">AI Score</th>
+              <th className="px-4 py-3">AI Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -70,11 +143,42 @@ function ContactsTab() {
                 <td className="px-4 py-3 text-slate-500">{c.email || "—"}</td>
                 <td className="px-4 py-3"><Badge>{c.status}</Badge></td>
                 <td className="px-4 py-3 text-slate-500">{c.deals.length}</td>
+                <td className="px-4 py-3">
+                  {c.aiScore != null ? (
+                    <span
+                      className={clsx("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold", scoreColor(c.aiScore))}
+                      title={c.aiScoreRationale || undefined}
+                    >
+                      {c.aiScore}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-300">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-2">
+                    <button
+                      className="text-slate-400 hover:text-brand-600 disabled:opacity-40"
+                      title="Score this lead with AI"
+                      onClick={() => scoreLead.mutate(c.id)}
+                      disabled={scoreLead.isPending}
+                    >
+                      <Sparkles size={16} />
+                    </button>
+                    <button
+                      className="text-slate-400 hover:text-brand-600"
+                      title="Draft an email with AI"
+                      onClick={() => setEmailContact(c)}
+                    >
+                      <Mail size={16} />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
             {contacts.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   No contacts yet. Add your first lead to get started.
                 </td>
               </tr>
@@ -113,6 +217,13 @@ function ContactsTab() {
             </button>
           </form>
         </Modal>
+      )}
+
+      {emailContact && <DraftEmailModal contact={emailContact} onClose={() => setEmailContact(null)} />}
+      {scoreLead.isError && (
+        <p className="mt-3 text-sm text-red-600">
+          {(scoreLead.error as any)?.response?.data?.error || "Lead scoring failed."}
+        </p>
       )}
     </div>
   );
